@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vibe-Core</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Georgia', serif;
+      background: linear-gradient(135deg, #1e1e2e 0%, #2d2d44 100%);
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    .container {
+      max-width: 600px;
+      background: rgba(255,255,255,0.05);
+      backdrop-filter: blur(10px);
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    }
+    h1 {
+      font-size: 2em;
+      margin-bottom: 10px;
+      color: #f0c674;
+    }
+    .category {
+      font-size: 0.9em;
+      color: #81a2be;
+      margin-bottom: 20px;
+    }
+    .quote {
+      font-size: 1.3em;
+      font-style: italic;
+      color: #b5bd68;
+      margin: 30px 0;
+      padding: 20px;
+      background: rgba(255,255,255,0.03);
+      border-left: 4px solid #f0c674;
+    }
+    .story {
+      line-height: 1.8;
+      margin: 30px 0;
+      text-align: justify;
+    }
+    .question {
+      background: rgba(240, 198, 116, 0.1);
+      padding: 20px;
+      border-radius: 10px;
+      margin: 30px 0;
+      font-size: 1.1em;
+      color: #f0c674;
+    }
+    .music {
+      margin: 30px 0;
+    }
+    iframe {
+      width: 100%;
+      height: 80px;
+      border: none;
+      border-radius: 10px;
+    }
+    .share {
+      text-align: center;
+      margin-top: 40px;
+    }
+    .share button {
+      background: #81a2be;
+      color: #1e1e2e;
+      border: none;
+      padding: 15px 30px;
+      border-radius: 25px;
+      font-size: 1em;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .share button:hover {
+      background: #f0c674;
+      transform: scale(1.05);
+    }
+    .loader {
+      text-align: center;
+      font-size: 1.5em;
+      color: #81a2be;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="content">
+    <div class="loader">Загрузка вайба...</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SUPABASE_URL = 'https://xxxxx.supabase.co'; // ЗАМЕНИ
+    const SUPABASE_KEY = 'твой_anon_key'; // ЗАМЕНИ
+    
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    
+    // Получаем ID вайба из URL (?id=uuid)
+    const params = new URLSearchParams(window.location.search);
+    const vibeId = params.get('id');
+    
+    if (!vibeId) {
+      document.getElementById('content').innerHTML = '<p>❌ Вайб не найден</p>';
+    } else {
+      loadVibe(vibeId);
+    }
+    
+    async function loadVibe(id) {
+      const { data, error } = await supabase
+        .from('vibes')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (error || !data) {
+        document.getElementById('content').innerHTML = '<p>❌ Вайб не найден</p>';
+        return;
+      }
+      
+      // Трекинг (записываем статистику)
+      await supabase.from('vibe_stats').insert({
+        vibe_id: id,
+        event_type: 'landing_view',
+        user_agent: navigator.userAgent
+      });
+      
+      // Рендерим контент
+      document.getElementById('content').innerHTML = `
+        <h1>${data.vibe_name}</h1>
+        <div class="category">${data.vibe_category} • ${data.core_emotion}</div>
+        <div class="quote">"${data.quote}"</div>
+        <div class="story">${data.story}</div>
+        <div class="question">💭 ${data.question}</div>
+        ${data.media_link ? `
+          <div class="music">
+            <iframe src="${convertToEmbed(data.media_link)}" allowfullscreen></iframe>
+          </div>
+        ` : ''}
+        <div class="share">
+          <button onclick="share()">Поделиться вайбом</button>
+        </div>
+      `;
+    }
+    
+    function convertToEmbed(url) {
+      // YouTube
+      if (url.includes('youtube.com') || url.includes('youtu.be')) {
+        const videoId = url.split('v=')[1] || url.split('/').pop();
+        return `https://www.youtube.com/embed/${videoId}`;
+      }
+      // Spotify
+      if (url.includes('spotify.com')) {
+        const playlistId = url.split('/').pop().split('?')[0];
+        return `https://open.spotify.com/embed/playlist/${playlistId}`;
+      }
+      return url;
+    }
+    
+    async function share() {
+      const url = window.location.href;
+      if (navigator.share) {
+        await navigator.share({ title: 'Vibe-Core', url });
+      } else {
+        navigator.clipboard.writeText(url);
+        alert('Ссылка скопирована!');
+      }
+      
+      // Трекинг
+      await supabase.from('vibe_stats').insert({
+        vibe_id: vibeId,
+        event_type: 'share'
+      });
+    }
+  </script>
+</body>
+</html>
